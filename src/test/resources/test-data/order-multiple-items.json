@@ -1,0 +1,29 @@
+{
+  "order": {
+    "orderId": "550e8400-e29b-41d4-a716-446655440101",
+    "status": "NEW",
+    "items": [
+      {
+        "productId": "550e8400-e29b-41d4-a716-446655440010",
+        "quantity": 5,
+        "price": 25.50,
+        "currency": "USD"
+      },
+      {
+        "productId": "550e8400-e29b-41d4-a716-446655440011",
+        "quantity": 3,
+        "price": 15.75,
+        "currency": "USD"
+      },
+      {
+        "productId": "550e8400-e29b-41d4-a716-446655440012",
+        "quantity": 1,
+        "price": 199.99,
+        "currency": "USD"
+      }
+    ],
+    "createdAt": "2026-02-07T10:00:00",
+    "updatedAt": "2026-02-07T10:00:00"
+  }
+}
+

@@ -1,0 +1,31 @@
+{
+    "commandType": "CREATE_ORDER",
+    "commandId": "eee6b522-e16e-4d88-8634-fe0024c82bc5",
+    "issuedAt": "2026-02-08T09:38:16.8174722",
+    "order": {
+        "orderId": "96620807-b8e7-4769-96cd-cd855989c485",
+        "status": "NEW",
+        "items": [
+            {
+                "productId": "59763171-c15c-4f78-a1ae-d4752c1b854d",
+                "quantity": 2,
+                "price": 100.0,
+                "currency": "USD"
+            },
+            {
+                "productId": "90039aa5-40f7-43de-9091-35ed21607714",
+                "quantity": 3,
+                "price": 150.0,
+                "currency": "USD"
+            },
+            {
+                "productId": "fdcd0142-3970-4ca8-a23a-15fe0901b98e",
+                "quantity": 4,
+                "price": 200.0,
+                "currency": "USD"
+            }
+        ],
+        "createdAt": "2026-02-08T09:38:16.8174722",
+        "updatedAt": "2026-02-08T09:38:16.8174722"
+    }
+}

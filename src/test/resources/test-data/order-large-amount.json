@@ -1,0 +1,17 @@
+{
+  "order": {
+    "orderId": "550e8400-e29b-41d4-a716-446655440102",
+    "status": "NEW",
+    "items": [
+      {
+        "productId": "550e8400-e29b-41d4-a716-446655440020",
+        "quantity": 10,
+        "price": 999.99,
+        "currency": "USD"
+      }
+    ],
+    "createdAt": "2026-02-07T10:00:00",
+    "updatedAt": "2026-02-07T10:00:00"
+  }
+}
+
