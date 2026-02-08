@@ -31,7 +31,8 @@ public class OrderMessageHandler {
     @KafkaListener(
             topics = "${app.kafka.topic.commands}",
             containerFactory = "orderCommandListenerFactory",
-            autoStartup = "${app.service.OrderCommandHandler.enabled:true}"
+            autoStartup = "${app.service.OrderCommandHandler.enabled:true}",
+            concurrency = "${app.service.OrderCommandHandler.concurrency:16}"
     )
     public void onCommand(OrderCommand command, Acknowledgment ack) {
         try {
@@ -80,7 +81,8 @@ public class OrderMessageHandler {
     @KafkaListener(
             topics = "${app.kafka.topic.events}",
             containerFactory = "orderEventListenerFactory",
-            autoStartup = "${app.service.OrderCommandHandler.enabled:true}"
+            autoStartup = "${app.service.OrderCommandHandler.enabled:true}",
+            concurrency = "${app.service.OrderCommandHandler.concurrency:16}"
     )
     public void onEvent(OrderEvent eventArg, Acknowledgment ack) {
         try {

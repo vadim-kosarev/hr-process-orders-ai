@@ -2,7 +2,8 @@ services:
   # Redis Service
   redis:
     image: redis:7.2-alpine
-    container_name: redis
+    container_name: o-ai.redis
+    hostname: o-ai.redis
     env_file:
       - .env.docker
     ports:
@@ -21,67 +22,72 @@ services:
       retries: 5
 
   # Redis-UI (Redis-Insight)
+
   redis-insight:
-    image: redislabs/redisinsight:latest
-    container_name: redis-insight
+    image: redis/redisinsight:latest
+    container_name: o-ai.redis-insight
+    hostname: o-ai.redis-insight
+    restart: unless-stopped
     env_file:
       - .env.docker
     ports:
-      - "${REDIS_INSIGHT_PORT}:8001"
+      - "5540:5540"
+    volumes:
+      - redis_insight_data:/data
     environment:
-      RIHOST: 0.0.0.0
-      RIPORT: 8001
-    depends_on:
-      redis:
-        condition: service_healthy
+      - REDISINSIGHT_LOGFILE=/data/redisinsight.log
     networks:
       - orders_network
+    depends_on:
+      - redis
 
   kafka:
     image: confluentinc/cp-kafka:latest
-    container_name: kafka
+    container_name: o-ai.kafka
+    hostname: o-ai.kafka
     env_file:
       - .env.docker
-    hostname: kafka
     ports:
       - "9092:9092"
       - "29092:29092"
     environment:
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
       KAFKA_NODE_ID: 1
+
       KAFKA_PROCESS_ROLES: broker,controller
 
       KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://o-ai.kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
 
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@o-ai.kafka:9093
+
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_COORDINATOR_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
       KAFKA_NUM_PARTITIONS: 3
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      KAFKA_CREATE_TOPICS: "${KAFKA_TOPIC_COMMANDS}:3:1,${KAFKA_TOPIC_EVENTS}:3:1"
+
     volumes:
       - kafka_data:/var/lib/kafka/data
     networks:
       - orders_network
-    command:
-      - /etc/confluent/docker/run
     healthcheck:
-      test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092" ]
+      test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092" ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-      start_interval: 2s
 
   kafka-init:
     image: confluentinc/cp-kafka:latest
-    container_name: kafka-init
+    container_name: o-ai.kafka-init
+    hostname: o-ai.kafka-init
     env_file:
       - .env.docker
     depends_on:
@@ -89,19 +95,23 @@ services:
         condition: service_healthy
     networks:
       - orders_network
-    command: [ "sh", "-c", "kafka-topics --bootstrap-server kafka:9092 --create --topic ${KAFKA_TOPIC_EVENTS} --partitions 3 --replication-factor 1 --if-not-exists && kafka-topics --bootstrap-server kafka:9092 --create --topic ${KAFKA_TOPIC_COMMANDS} --partitions 3 --replication-factor 1 --if-not-exists" ]
+    command: [
+      "sh", "-c",
+      "kafka-topics --bootstrap-server o-ai.kafka:9092 --create --topic ${KAFKA_TOPIC_EVENTS} --partitions 64 --replication-factor 1 --if-not-exists && kafka-topics --bootstrap-server o-ai.kafka:9092 --create --topic ${KAFKA_TOPIC_COMMANDS} --partitions 64 --replication-factor 1 --if-not-exists"
+    ]
 
   # Kafka-UI Service
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
+    container_name: o-ai.kafka-ui
+    hostname: o-ai.kafka-ui
     env_file:
       - .env.docker
     ports:
       - "${KAFKA_UI_PORT}:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: orders-kafka
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: o-ai.kafka:9092
     depends_on:
       kafka:
         condition: service_healthy
@@ -112,7 +122,8 @@ services:
   # PostgreSQL Service
   postgres:
     image: postgres:16-alpine
-    container_name: postgres
+    container_name: o-ai.postgres
+    hostname: o-ai.postgres
     env_file:
       - .env.docker
     ports:
@@ -136,7 +147,8 @@ services:
   # Spring Boot Application (Development mode with JAR volume)
   orders-app:
     image: eclipse-temurin:21-jre-alpine
-    container_name: orders-app
+    container_name: o-ai.orders-app
+    hostname: o-ai.orders-app
     env_file:
       - .env.docker
     ports:
@@ -192,4 +204,5 @@ volumes:
     driver: local
   postgres_data:
     driver: local
-
+  redis_insight_data:
+    driver: local
