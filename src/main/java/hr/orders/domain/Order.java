@@ -1,6 +1,6 @@
 package hr.orders.domain;
 
-import hr.orders.domain.event.OrderCreatedEvent;
+import hr.orders.domain.event.*;
 import hr.orders.domain.valueobject.Money;
 import hr.orders.domain.valueobject.OrderID;
 import hr.orders.domain.valueobject.Qty;
@@ -48,8 +48,12 @@ public class Order extends DomainObject {
     private LocalDateTime updatedAt;
 
     public static Order create() {
+        return create(OrderID.generate());
+    }
+
+    public static Order create(OrderID id) {
         Order order = new Order();
-        order.orderId = OrderID.generate();
+        order.orderId = id;
         order.status = OrderStatus.NEW;
         order.createdAt = LocalDateTime.now();
         order.updatedAt = LocalDateTime.now();
@@ -58,10 +62,9 @@ public class Order extends DomainObject {
         return order;
     }
 
-    public static Order createWithItems(List<OrderItem> items) {
-        Order order = create();
+    public static Order createWithItems(OrderID id, List<OrderItem> items) {
+        Order order = create(id);
         if (items != null && !items.isEmpty()) {
-            // Validate currency for all items
             for (OrderItem item : items) {
                 order.validateItemCurrency(item);
             }
@@ -162,14 +165,17 @@ public class Order extends DomainObject {
         }
         this.status = OrderStatus.IN_PROGRESS;
         updateTimestamp();
+
+        raiseEvent(new OrderProcessingStartedEvent(orderId));
     }
 
-    public void markAsReady() {
+    public void complete() {
         if (!status.canBeMarkedAsReady()) {
             throw new IllegalStateException("Can only mark IN_PROGRESS orders as READY");
         }
         this.status = OrderStatus.READY;
         updateTimestamp();
+        raiseEvent(new OrderReadyEvent(orderId));
     }
 
     public void markAsFailed() {
@@ -178,6 +184,7 @@ public class Order extends DomainObject {
         }
         this.status = OrderStatus.FAILED;
         updateTimestamp();
+        raiseEvent(new OrderProcessingFailedEvent(orderId, "Somthing was WRONG"));
     }
 
     public void cancel() {
@@ -186,6 +193,7 @@ public class Order extends DomainObject {
         }
         this.status = OrderStatus.CANCELLED;
         updateTimestamp();
+        raiseEvent(new OrderCancelledEvent(orderId));
     }
 
     public boolean hasItems() {

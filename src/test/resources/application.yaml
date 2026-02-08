@@ -32,6 +32,13 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis}
+      database: 0
+      timeout: 60000ms
 
 # Logging Configuration
 logging:
@@ -39,6 +46,8 @@ logging:
     hr.orders: DEBUG
     org.springframework.kafka: INFO
     org.springframework.test: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
 
 app:
   service:

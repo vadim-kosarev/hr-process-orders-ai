@@ -7,7 +7,6 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
 
 /**
  * Base class for all order service events
@@ -17,7 +16,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString
-public abstract class OrderServiceEvent extends DomainEvent implements Serializable {
+public abstract class OrderServiceEvent extends OrderEvent implements Serializable {
 
     protected OrderID orderId;
 

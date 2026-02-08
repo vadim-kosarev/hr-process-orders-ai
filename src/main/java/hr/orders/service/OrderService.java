@@ -3,7 +3,7 @@ package hr.orders.service;
 import hr.orders.domain.Order;
 import hr.orders.domain.OrderItem;
 import hr.orders.domain.OrderStatus;
-import hr.orders.domain.event.*;
+import hr.orders.domain.event.OrderEvent;
 import hr.orders.domain.valueobject.OrderID;
 import hr.orders.repository.OrderRepository;
 import jakarta.transaction.Transactional;
@@ -12,8 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.List;
-import java.util.UUID;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -23,29 +24,29 @@ public class OrderService {
     private static final String KAFKA_TOPIC = "order-events";
 
     private final OrderRepository orderRepository;
-    private final KafkaTemplate<String, OrderServiceEvent> kafkaTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
 
     /**
      * Create new order with items
-     * @param items list of order items
+     *
+     * @param orderID
+     * @param items   list of order items
      * @return created order
      */
     @Transactional
-    public Order createNewOrder(List<OrderItem> items) {
+    public Order createNewOrder(OrderID orderID, List<OrderItem> items) {
         log.info("Creating new order with {} items", items.size());
 
         try {
-            if (items == null || items.isEmpty()) {
-                throw new IllegalArgumentException("Cannot create order without items");
-            }
 
-            Order order = Order.createWithItems(items);
+            Order order = Order.createWithItems(orderID, items);
+
             Order savedOrder = orderRepository.save(order);
             log.info("Order created successfully: orderId={}, status={}",
-                savedOrder.getOrderId(), savedOrder.getStatus());
+                    savedOrder.getOrderId(), savedOrder.getStatus());
 
-            publishEvent(new OrderCreatedEvent(savedOrder.getOrderId()));
+            publishEvents(order.pullEvents());
 
             return savedOrder;
 
@@ -55,161 +56,63 @@ public class OrderService {
         }
     }
 
-    @Transactional
-    public Order cancelOrder(UUID orderId) {
-        log.info("Cancelling order: orderId={}", orderId);
-
-        try {
-            Order order = orderRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
-
-            log.info("Found order: orderId={}, currentStatus={}", order.getOrderId(), order.getStatus());
-
-            order.cancel();
-
-            Order cancelledOrder = orderRepository.save(order);
-            log.info("Order cancelled successfully: orderId={}, status={}",
-                cancelledOrder.getOrderId(), cancelledOrder.getStatus());
-
-            publishEvent(new OrderCancelledEvent(cancelledOrder.getOrderId()));
-
-            return cancelledOrder;
-
-        } catch (IllegalStateException e) {
-            log.error("Cannot cancel order {}: {}", orderId, e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            log.error("Error cancelling order {}: {}", orderId, e.getMessage(), e);
-            throw new RuntimeException("Failed to cancel order", e);
-        }
-    }
-
-    /**
-     * Get order status
-     * @param orderId order identifier
-     * @return order status
-     */
-    public OrderStatus getOrderStatus(UUID orderId) {
-        log.info("Getting order status: orderId={}", orderId);
-
-        try {
-            Order order = orderRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
-
-            log.info("Order status retrieved: orderId={}, status={}", order.getOrderId(), order.getStatus());
-            return order.getStatus();
-
-        } catch (Exception e) {
-            log.error("Error getting order status {}: {}", orderId, e.getMessage(), e);
-            throw new RuntimeException("Failed to get order status", e);
+    private void publishEvents(Collection<OrderEvent> events) {
+        for (OrderEvent event : events) {
+            try {
+                log.info("Publishing event: type={}, orderId={}", event.getEventType(), event.getOrderId());
+                kafkaTemplate.send(KAFKA_TOPIC, event.getOrderId().asString(), event);
+                log.info("Event published successfully: type={}", event.getEventType());
+            } catch (Exception e) {
+                log.error("Error publishing event {}: {}", event.getEventType(), e.getMessage(), e);
+            }
         }
     }
 
     @Transactional
-    public void startProcessing(UUID orderId) {
-        log.info("Starting processing for order: orderId={}", orderId);
-
+    public void startProcessing(OrderID orderId) {
         try {
-            Order order = orderRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
-
-            log.info("Found order: orderId={}, currentStatus={}", order.getOrderId(), order.getStatus());
-
+            Order order = orderRepository.findByOrderId(orderId).orElseThrow();
             order.startProcessing();
-
-            Order updatedOrder = orderRepository.save(order);
-            log.info("Order processing started: orderId={}, status={}",
-                updatedOrder.getOrderId(), updatedOrder.getStatus());
-
-            publishEvent(new OrderProcessingStartedEvent(updatedOrder.getOrderId()));
-
-        } catch (IllegalStateException e) {
-            log.error("Cannot start processing order {}: {}", orderId, e.getMessage());
-
-            publishEvent(new OrderProcessingFailedEvent(OrderID.of(orderId), e.getMessage()));
-            throw e;
+            orderRepository.save(order);
+            publishEvents(order.pullEvents());
         } catch (Exception e) {
-            log.error("Error starting processing order {}: {}", orderId, e.getMessage(), e);
-
-            publishEvent(new OrderProcessingFailedEvent(OrderID.of(orderId), e.getMessage()));
+            log.error("Error starting processing for orderId {}: {}", orderId, e.getMessage(), e);
             throw new RuntimeException("Failed to start processing order", e);
         }
     }
 
-    /**
-     * Mark order as ready (called by event handler)
-     * @param orderId order identifier
-     */
     @Transactional
-    public void markAsReady(UUID orderId) {
-        log.info("Marking order as ready: orderId={}", orderId);
-
+    public void performProcessOrder(OrderID orderId) {
         try {
-            Order order = orderRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
-
-            log.info("Found order: orderId={}, currentStatus={}", order.getOrderId(), order.getStatus());
-
-            // Mark as ready
-            order.markAsReady();
-
-            // Save order
-            Order updatedOrder = orderRepository.save(order);
-            log.info("Order marked as ready: orderId={}, status={}",
-                updatedOrder.getOrderId(), updatedOrder.getStatus());
-
-            // Publish event
-            publishEvent(new OrderReadyEvent(updatedOrder.getOrderId()));
-
-        } catch (IllegalStateException e) {
-            log.error("Cannot mark order {} as ready: {}", orderId, e.getMessage());
-            throw e;
+            Order order = orderRepository.findByOrderId(orderId).orElseThrow();
+            double random = Math.random();
+            if (random < 0.5) {
+                log.info("Performing process order for orderId {}: SUCCESS", orderId);
+                order.complete();
+            } else if (random < 0.75) {
+                log.info("Performing process order for orderId {}: CANCELLED", orderId);
+                order.cancel();
+            } else {
+                log.info("Performing process order for orderId {}: FAILED", orderId);
+                order.markAsFailed();
+            }
+            orderRepository.save(order);
+            publishEvents(order.pullEvents());
         } catch (Exception e) {
-            log.error("Error marking order {} as ready: {}", orderId, e.getMessage(), e);
-            throw new RuntimeException("Failed to mark order as ready", e);
+            log.error("Error performing process order for orderId {}: {}", orderId, e.getMessage(), e);
+            throw new RuntimeException("Failed to perform process order", e);
         }
     }
 
-    /**
-     * Mark order as failed (called by event handler)
-     * @param orderId order identifier
-     * @param reason failure reason
-     */
     @Transactional
-    public void markAsFailed(UUID orderId, String reason) {
-        log.info("Marking order as failed: orderId={}, reason={}", orderId, reason);
-
+    public Optional<OrderStatus> getOrderStatus(OrderID orderId) {
         try {
-            Order order = orderRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
-
-            log.info("Found order: orderId={}, currentStatus={}", order.getOrderId(), order.getStatus());
-
-            // Mark as failed
-            order.markAsFailed();
-
-            // Save order
-            Order updatedOrder = orderRepository.save(order);
-            log.info("Order marked as failed: orderId={}, status={}",
-                updatedOrder.getOrderId(), updatedOrder.getStatus());
-
-            // Publish event
-            publishEvent(new OrderProcessingFailedEvent(updatedOrder.getOrderId(), reason));
-
+            return orderRepository.findByOrderId(orderId).map(Order::getStatus);
         } catch (Exception e) {
-            log.error("Error marking order {} as failed: {}", orderId, e.getMessage(), e);
-            throw new RuntimeException("Failed to mark order as failed", e);
+            log.error("Error getting order status for orderId {}: {}", orderId, e.getMessage(), e);
+            throw new RuntimeException("Failed to get order status", e);
         }
-    }
 
-    private void publishEvent(OrderServiceEvent event) {
-        try {
-            log.info("Publishing event: type={}, orderId={}", event.getEventType(), event.getOrderId());
-            kafkaTemplate.send(KAFKA_TOPIC, event.getOrderId().asString(), event);
-            log.info("Event published successfully: type={}", event.getEventType());
-        } catch (Exception e) {
-            log.error("Error publishing event {}: {}", event.getEventType(), e.getMessage(), e);
-        }
     }
 }
 

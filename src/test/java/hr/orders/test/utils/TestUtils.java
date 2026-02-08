@@ -4,6 +4,7 @@ import hr.orders.domain.Order;
 import hr.orders.domain.OrderItem;
 import hr.orders.domain.command.CreateOrderCommand;
 import hr.orders.domain.valueobject.Money;
+import hr.orders.domain.valueobject.OrderID;
 import hr.orders.domain.valueobject.Qty;
 
 import java.math.BigDecimal;
@@ -109,7 +110,7 @@ public class TestUtils {
             items.add(item);
         }
 
-        return Order.createWithItems(items);
+        return Order.createWithItems(OrderID.generate(), items);
     }
 
     /**
@@ -148,7 +149,8 @@ public class TestUtils {
         );
 
         List<OrderItem> items = List.of(item1, item2);
-        return Order.createWithItems(items);
+        return Order.createWithItems(OrderID.generate(),
+                items);
     }
 
     /**
@@ -171,7 +173,7 @@ public class TestUtils {
         );
 
         List<OrderItem> items = List.of(item1, item2);
-        return Order.createWithItems(items);
+        return Order.createWithItems(OrderID.generate(), items);
     }
 }
 

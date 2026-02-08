@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -93,7 +92,7 @@ class DomainModelTest {
 
         // IN_PROGRESS -> READY
         logger.info("Transitioning IN_PROGRESS -> READY");
-        order.markAsReady();
+        order.complete();
         logger.info("Status after markAsReady: {}, isFinal: {}", order.getStatus(), order.getStatus().isFinal());
         assertEquals(OrderStatus.READY, order.getStatus());
         assertTrue(order.getStatus().isFinal());
@@ -160,7 +159,7 @@ class DomainModelTest {
         // Test 1: Cannot mark as READY from NEW (must be IN_PROGRESS)
         logger.info("Test 4.1: Attempting to markAsReady from NEW status");
         assertThrows(IllegalStateException.class, () -> {
-            order.markAsReady();
+            order.complete();
         });
         logger.info("Test 4.1: Correctly rejected markAsReady from NEW");
 
@@ -171,7 +170,7 @@ class DomainModelTest {
         logger.info("Test 4.2: Successfully transitioned to IN_PROGRESS");
 
         // Given: Order in READY status
-        order.markAsReady();
+        order.complete();
         logger.info("Order transitioned to READY status");
 
         // Test 3: Cannot cancel READY order
@@ -670,7 +669,9 @@ class DomainModelTest {
         OrderItem eurItem1 = OrderItem.create(productId1, Qty.of(2), Money.of(10.50, "EUR"));
         OrderItem eurItem2 = OrderItem.create(productId2, Qty.of(3), Money.of(20.00, "EUR"));
 
-        Order order = Order.createWithItems(java.util.Arrays.asList(eurItem1, eurItem2));
+        Order order = Order.createWithItems(
+                OrderID.generate(),
+                java.util.Arrays.asList(eurItem1, eurItem2));
 
         // When: Calculate total
         Money total = order.calculateTotal();
